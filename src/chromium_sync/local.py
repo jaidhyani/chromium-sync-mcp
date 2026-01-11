@@ -326,6 +326,56 @@ class LocalReader:
             if query_lower in b.title.lower() or query_lower in b.url.lower()
         ]
 
+    def get_local_tabs(self) -> list[Tab]:
+        """Read open tabs from the local browser session.
+
+        Reads from the Sessions directory which contains current local tabs.
+        """
+        sessions_path = self.profile_path / "Sessions"
+        if not sessions_path.exists():
+            return []
+
+        tabs = []
+        seen_urls: set[str] = set()
+
+        # Try to read from Session_* files (current session data)
+        for session_file in sorted(sessions_path.glob("Session_*"), reverse=True):
+            try:
+                temp_file = self._copy_locked_file(session_file, session_file.name)
+                with open(temp_file, "rb") as f:
+                    data = f.read()
+
+                # Extract URLs from the session data
+                urls = re.findall(rb"https?://[^\x00-\x1f\x7f-\xff\"<>]+", data)
+                for url in urls:
+                    url_str = url.decode("utf-8", errors="replace")
+                    if "/favicon" in url_str or url_str in seen_urls:
+                        continue
+                    seen_urls.add(url_str)
+                    tabs.append(Tab(url=url_str, title=""))
+            except Exception:
+                continue
+
+        # Also try Current Session file
+        current_session = self.profile_path / "Current Session"
+        if current_session.exists():
+            try:
+                temp_file = self._copy_locked_file(current_session, "CurrentSession")
+                with open(temp_file, "rb") as f:
+                    data = f.read()
+
+                urls = re.findall(rb"https?://[^\x00-\x1f\x7f-\xff\"<>]+", data)
+                for url in urls:
+                    url_str = url.decode("utf-8", errors="replace")
+                    if "/favicon" in url_str or url_str in seen_urls:
+                        continue
+                    seen_urls.add(url_str)
+                    tabs.append(Tab(url=url_str, title=""))
+            except Exception:
+                pass
+
+        return tabs
+
     def get_tabs(self) -> list[Device]:
         """Read open tabs from all synced devices via LevelDB."""
         sync_data_path = self.profile_path / "Sync Data" / "LevelDB"

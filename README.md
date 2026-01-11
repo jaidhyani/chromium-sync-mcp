@@ -48,22 +48,19 @@ Add to your Claude Code MCP settings:
 
 | Tool | Description |
 |------|-------------|
-| `browser_tabs` | Get open tabs from all synced devices |
-| `browser_history` | Search browsing history with optional filters |
-| `browser_bookmarks` | Get bookmarks, optionally filtered by folder |
-| `browser_search_bookmarks` | Search bookmarks by title or URL |
-| `browser_select` | Select which browser to use (when multiple installed) |
+| `get_tabs_all_devices` | Get open tabs from all synced devices |
+| `get_tabs_local` | Get open tabs from the local browser session |
+| `get_history` | Search browsing history with optional filters |
+| `get_bookmarks` | Get bookmarks, optionally filtered by folder |
+| `search_bookmarks` | Search bookmarks by title or URL |
+| `select_browser` | Select which browser to use (when multiple installed) |
+| `set_profile_path` | Manually set the browser profile path |
 
 ## Configuration
 
 ### Auto-detection
 
-The server automatically detects installed browsers in this order:
-1. Brave
-2. Chrome
-3. Chromium
-
-If multiple browsers are found, you'll be prompted to select one.
+The server automatically detects installed Chromium-based browsers. If multiple browsers are found, you'll be prompted to select one.
 
 ### Environment Variable
 
@@ -75,7 +72,7 @@ export CHROMIUM_PROFILE_PATH=~/.config/google-chrome/Default
 
 ### Saved Preference
 
-When prompted to select a browser, choose `save_default: true` to save your preference to `~/.config/chromium-sync/profile`.
+When prompted to select a browser, use `select_browser` with `save_default: true` to save your preference to `~/.config/chromium-sync/profile`.
 
 ## Supported Browsers
 

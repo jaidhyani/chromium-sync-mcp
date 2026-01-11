@@ -21,6 +21,7 @@ from .local import (
     HistoryEntry,
     LocalReader,
     MultipleProfilesFound,
+    Tab,
     find_all_browser_profiles,
     resolve_browser_profile,
     save_profile_choice,
@@ -83,7 +84,7 @@ def format_profile_selection_prompt(profiles: dict[str, Path]) -> str:
     for name, path in profiles.items():
         lines.append(f"  - **{name}**: {path}")
 
-    lines.append("\nUse the `browser_select` tool to choose one.")
+    lines.append("\nUse the `select_browser` tool to choose one.")
     lines.append("Set `save_default: true` to remember your choice.")
     return "\n".join(lines)
 
@@ -93,7 +94,7 @@ async def list_tools() -> list[Tool]:
     """List available sync tools."""
     return [
         Tool(
-            name="browser_select",
+            name="select_browser",
             description=(
                 "Select which browser to use when multiple are installed. "
                 "Use this when prompted to choose between browsers."
@@ -103,7 +104,7 @@ async def list_tools() -> list[Tool]:
                 "properties": {
                     "browser": {
                         "type": "string",
-                        "description": "Browser to use: 'brave', 'chrome', or 'chromium'",
+                        "description": "Browser to use: 'chrome', 'chromium', or 'brave'",
                     },
                     "save_default": {
                         "type": "boolean",
@@ -115,7 +116,26 @@ async def list_tools() -> list[Tool]:
             },
         ),
         Tool(
-            name="browser_tabs",
+            name="set_profile_path",
+            description="Manually set the browser profile path.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Absolute path to the browser profile directory",
+                    },
+                    "save_default": {
+                        "type": "boolean",
+                        "description": "Save this path as the default for future sessions",
+                        "default": False,
+                    },
+                },
+                "required": ["path"],
+            },
+        ),
+        Tool(
+            name="get_tabs_all_devices",
             description=(
                 "Get open tabs from all synced devices. "
                 "Returns a list of devices with their open tabs."
@@ -126,7 +146,15 @@ async def list_tools() -> list[Tool]:
             },
         ),
         Tool(
-            name="browser_history",
+            name="get_tabs_local",
+            description="Get open tabs from the current local browser session.",
+            inputSchema={
+                "type": "object",
+                "properties": {},
+            },
+        ),
+        Tool(
+            name="get_history",
             description="Search browsing history. Supports text search and date filtering.",
             inputSchema={
                 "type": "object",
@@ -148,7 +176,7 @@ async def list_tools() -> list[Tool]:
             },
         ),
         Tool(
-            name="browser_bookmarks",
+            name="get_bookmarks",
             description="Get bookmarks. Optionally filter by parent folder ID.",
             inputSchema={
                 "type": "object",
@@ -164,7 +192,7 @@ async def list_tools() -> list[Tool]:
             },
         ),
         Tool(
-            name="browser_search_bookmarks",
+            name="search_bookmarks",
             description="Search bookmarks by title or URL.",
             inputSchema={
                 "type": "object",
@@ -183,14 +211,28 @@ async def list_tools() -> list[Tool]:
 @app.call_tool()
 async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
     """Handle tool calls."""
-    global _pending_profiles
+    global _pending_profiles, _reader
 
     # Handle browser selection
-    if name == "browser_select":
+    if name == "select_browser":
         browser = arguments.get("browser", "")
         save_default = arguments.get("save_default", False)
         result = select_browser(browser, save_default)
         return [TextContent(type="text", text=result)]
+
+    # Handle manual profile path setting
+    if name == "set_profile_path":
+        path_str = arguments.get("path", "")
+        save_default = arguments.get("save_default", False)
+        path = Path(path_str)
+        if not path.exists():
+            return [TextContent(type="text", text=f"Path does not exist: {path}")]
+        if save_default:
+            save_profile_choice(path)
+        _reader = LocalReader(path)
+        _pending_profiles = None
+        saved_msg = f" Saved to {CONFIG_FILE}" if save_default else ""
+        return [TextContent(type="text", text=f"Set profile path to {path}.{saved_msg}")]
 
     # For all other tools, we need a reader
     reader = get_reader()
@@ -202,12 +244,17 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
     if reader is None:
         return [TextContent(type="text", text="No browser profile found.")]
 
-    if name == "browser_tabs":
+    if name == "get_tabs_all_devices":
         devices = reader.get_tabs()
         result = format_devices(devices)
         return [TextContent(type="text", text=result)]
 
-    elif name == "browser_history":
+    elif name == "get_tabs_local":
+        tabs = reader.get_local_tabs()
+        result = format_local_tabs(tabs)
+        return [TextContent(type="text", text=result)]
+
+    elif name == "get_history":
         query = arguments.get("query")
         limit = arguments.get("limit", 100)
         days_back = arguments.get("days_back")
@@ -215,13 +262,13 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         result = format_history(history)
         return [TextContent(type="text", text=result)]
 
-    elif name == "browser_bookmarks":
+    elif name == "get_bookmarks":
         folder = arguments.get("folder")
         bookmarks = reader.get_bookmarks(folder_id=folder)
         result = format_bookmarks(bookmarks)
         return [TextContent(type="text", text=result)]
 
-    elif name == "browser_search_bookmarks":
+    elif name == "search_bookmarks":
         query = arguments.get("query", "")
         bookmarks = reader.search_bookmarks(query)
         result = format_bookmarks(bookmarks)
@@ -247,6 +294,21 @@ def format_devices(devices: list[Device]) -> str:
                     lines.append(f"  - [{tab.title}]({tab.url})")
                 else:
                     lines.append(f"  - {tab.url}")
+
+    return "\n".join(lines)
+
+
+def format_local_tabs(tabs: list[Tab]) -> str:
+    """Format local tabs for display."""
+    if not tabs:
+        return "No open tabs found in local session."
+
+    lines = [f"Found {len(tabs)} open tabs:\n"]
+    for tab in tabs:
+        if tab.title:
+            lines.append(f"- [{tab.title}]({tab.url})")
+        else:
+            lines.append(f"- {tab.url}")
 
     return "\n".join(lines)
 
