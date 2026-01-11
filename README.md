@@ -57,6 +57,36 @@ Add to your Claude Code MCP settings:
 | `set_profile_path` | Manually set the browser profile path |
 | `check_sync_status` | Check what data is accessible (for debugging) |
 
+### get_history
+
+Returns a JSON array of history entries. Supports substring search, regex patterns, and date filtering.
+
+**Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `query` | string | Substring match against URL and title (case-insensitive). Cannot be used with `pattern`. |
+| `pattern` | string | Regex match against URL and title. Cannot be used with `query`. |
+| `limit` | integer | Maximum results to return. Default: 100 |
+| `days_back` | integer | Only return entries from the last N days. |
+| `after` | string | ISO date or datetime. Only entries on or after this time. |
+| `before` | string | ISO date or datetime. Only entries before this time. |
+
+**Date formats:** `YYYY-MM-DD` or `YYYY-MM-DDTHH:MM:SS`
+
+**Example response:**
+
+```json
+[
+  {
+    "url": "https://github.com/anthropics/claude-code",
+    "title": "GitHub - anthropics/claude-code",
+    "visit_time": "2026-01-11T14:30:00",
+    "visit_count": 5
+  }
+]
+```
+
 ## Configuration
 
 ### Auto-detection
