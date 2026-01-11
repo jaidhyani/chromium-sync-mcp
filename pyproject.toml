@@ -47,9 +47,13 @@ dev = [
     "ruff>=0.8.0",
     "pyright>=1.1.0",
 ]
+setup = [
+    "websockify>=0.12.0",
+]
 
 [project.scripts]
 chromium-sync-mcp = "chromium_sync.server:main"
+chromium-sync-setup = "chromium_sync.passphrase_setup:main"
 
 [build-system]
 requires = ["hatchling"]

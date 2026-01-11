@@ -55,6 +55,7 @@ Add to your Claude Code MCP settings:
 | `search_bookmarks` | Search bookmarks by title or URL |
 | `select_browser` | Select which browser to use (when multiple installed) |
 | `set_profile_path` | Manually set the browser profile path |
+| `check_sync_status` | Check what data is accessible (for debugging) |
 
 ## Configuration
 
@@ -91,6 +92,32 @@ This server reads directly from your browser's local profile files:
 - **Synced Tabs**: LevelDB (contains tabs from all your synced devices)
 
 No authentication or network requests required.
+
+## Headless Setup (Sync Passphrase Entry)
+
+If you're running on a headless server and need to enter your Chrome sync passphrase, use the `chromium-sync-setup` command. It launches a browser in a virtual display and provides a secure web URL for remote access.
+
+This is a **one-time setup** per machine. Once you've entered your passphrase and sync is established, you won't need to run this again.
+
+```bash
+# If you installed via uvx (recommended)
+uvx --with chromium-sync-mcp[setup] --from chromium-sync-mcp chromium-sync-setup
+
+# If you installed via pip
+pip install chromium-sync-mcp[setup]
+chromium-sync-setup
+```
+
+**What it does:**
+1. Starts a virtual X display (Xvnc or Xvfb)
+2. Launches your browser to the sync settings page
+3. Provides a secure HTTPS URL via Cloudflare tunnel
+
+**System requirements (one of):**
+- TigerVNC: `sudo apt install tigervnc-standalone-server`
+- Or Xvfb + x11vnc: `sudo apt install xvfb x11vnc`
+
+The script auto-downloads cloudflared and noVNC, so those don't need manual installation.
 
 ## License
 

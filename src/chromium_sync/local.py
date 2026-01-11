@@ -195,6 +195,12 @@ class LocalReader:
         self.profile_path = profile_path
         self._temp_dir = tempfile.mkdtemp(prefix="chromium_sync_")
 
+    def is_profile_initialized(self) -> bool:
+        """Check if the profile has been used (has history or sync data)."""
+        has_history = (self.profile_path / "History").exists()
+        has_sync_data = (self.profile_path / "Sync Data" / "LevelDB").exists()
+        return has_history or has_sync_data
+
     def close(self):
         """Clean up temporary files."""
         if os.path.exists(self._temp_dir):

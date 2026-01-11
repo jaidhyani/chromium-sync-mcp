@@ -205,6 +205,14 @@ async def list_tools() -> list[Tool]:
                 "required": ["query"],
             },
         ),
+        Tool(
+            name="check_sync_status",
+            description="Check what browser data is accessible. Useful for debugging.",
+            inputSchema={
+                "type": "object",
+                "properties": {},
+            },
+        ),
     ]
 
 
@@ -242,16 +250,30 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         return [TextContent(type="text", text=prompt)]
 
     if reader is None:
-        return [TextContent(type="text", text="No browser profile found.")]
+        return [TextContent(type="text", text=f"No browser profile found.\n\n{SETUP_HINT}")]
+
+    def with_setup_hint_if_empty(result: str, data: list) -> str:
+        """Append setup hint if data is empty and profile isn't initialized."""
+        if not data and not reader.is_profile_initialized():
+            return f"{result}\n\n{SETUP_HINT}"
+        return result
 
     if name == "get_tabs_all_devices":
         devices = reader.get_tabs()
-        result = format_devices(devices)
+        if not devices:
+            result = (
+                "Profile found but no synced devices detected. "
+                "You'll only be able to access browser data from this machine.\n\n"
+                "You should be able to enable sync from your browser's settings.\n\n"
+                f"{SETUP_HINT}"
+            )
+        else:
+            result = format_devices(devices)
         return [TextContent(type="text", text=result)]
 
     elif name == "get_tabs_local":
         tabs = reader.get_local_tabs()
-        result = format_local_tabs(tabs)
+        result = with_setup_hint_if_empty(format_local_tabs(tabs), tabs)
         return [TextContent(type="text", text=result)]
 
     elif name == "get_history":
@@ -259,29 +281,42 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         limit = arguments.get("limit", 100)
         days_back = arguments.get("days_back")
         history = reader.get_history(query=query, limit=limit, days_back=days_back)
-        result = format_history(history)
+        result = with_setup_hint_if_empty(format_history(history), history)
         return [TextContent(type="text", text=result)]
 
     elif name == "get_bookmarks":
         folder = arguments.get("folder")
         bookmarks = reader.get_bookmarks(folder_id=folder)
-        result = format_bookmarks(bookmarks)
+        result = with_setup_hint_if_empty(format_bookmarks(bookmarks), bookmarks)
         return [TextContent(type="text", text=result)]
 
     elif name == "search_bookmarks":
         query = arguments.get("query", "")
         bookmarks = reader.search_bookmarks(query)
-        result = format_bookmarks(bookmarks)
+        result = with_setup_hint_if_empty(format_bookmarks(bookmarks), bookmarks)
+        return [TextContent(type="text", text=result)]
+
+    elif name == "check_sync_status":
+        result = check_sync_status(reader)
         return [TextContent(type="text", text=result)]
 
     else:
         return [TextContent(type="text", text=f"Unknown tool: {name}")]
 
 
+SETUP_HINT = """
+On a headless server, run:
+```
+uvx --with chromium-sync-mcp[setup] \\
+    --from chromium-sync-mcp chromium-sync-setup
+```
+""".strip()
+
+
 def format_devices(devices: list[Device]) -> str:
     """Format devices and tabs for display."""
     if not devices:
-        return "No devices with open tabs found."
+        return "No synced devices found."
 
     lines = []
     for device in devices:
@@ -301,7 +336,7 @@ def format_devices(devices: list[Device]) -> str:
 def format_local_tabs(tabs: list[Tab]) -> str:
     """Format local tabs for display."""
     if not tabs:
-        return "No open tabs found in local session."
+        return "No open tabs found."
 
     lines = [f"Found {len(tabs)} open tabs:\n"]
     for tab in tabs:
@@ -338,6 +373,41 @@ def format_bookmarks(bookmarks: list[Bookmark]) -> str:
             lines.append(f"- [folder] {bookmark.title} (id: {bookmark.id})")
         else:
             lines.append(f"- [{bookmark.title}]({bookmark.url})")
+
+    return "\n".join(lines)
+
+
+def check_sync_status(reader: LocalReader) -> str:
+    """Check what browser data is accessible and report status."""
+    lines = [f"**Profile:** {reader.profile_path}\n"]
+
+    try:
+        history = reader.get_history(limit=1)
+        lines.append(f"- History: OK ({len(history)} entries sampled)")
+    except Exception as e:
+        lines.append(f"- History: Error ({e})")
+
+    try:
+        bookmarks = reader.get_bookmarks()
+        lines.append(f"- Bookmarks: OK ({len(bookmarks)} items)")
+    except Exception as e:
+        lines.append(f"- Bookmarks: Error ({e})")
+
+    try:
+        local_tabs = reader.get_local_tabs()
+        lines.append(f"- Local tabs: OK ({len(local_tabs)} tabs)")
+    except Exception as e:
+        lines.append(f"- Local tabs: Error ({e})")
+
+    try:
+        devices = reader.get_tabs()
+        total_tabs = sum(len(d.tabs) for d in devices)
+        if devices:
+            lines.append(f"- Synced tabs: OK ({len(devices)} devices, {total_tabs} tabs)")
+        else:
+            lines.append("- Synced tabs: No devices found")
+    except Exception as e:
+        lines.append(f"- Synced tabs: Error ({e})")
 
     return "\n".join(lines)
 
