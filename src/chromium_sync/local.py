@@ -18,7 +18,6 @@ from pathlib import Path
 
 import plyvel
 
-
 # Chromium epoch starts at 1601-01-01, need to convert to Unix epoch
 CHROMIUM_EPOCH_OFFSET = 11644473600000000  # microseconds
 
@@ -36,6 +35,7 @@ def chromium_time_to_datetime(chromium_time: int) -> datetime | None:
 @dataclass
 class Tab:
     """Open tab from a browser session."""
+
     url: str
     title: str
     favicon_url: str | None = None
@@ -45,6 +45,7 @@ class Tab:
 @dataclass
 class Device:
     """Device with open tabs."""
+
     id: str
     name: str
     device_type: str
@@ -54,6 +55,7 @@ class Device:
 @dataclass
 class HistoryEntry:
     """Browsing history entry."""
+
     url: str
     title: str
     visit_time: datetime
@@ -63,6 +65,7 @@ class HistoryEntry:
 @dataclass
 class Bookmark:
     """Bookmark entry."""
+
     id: str
     url: str
     title: str
@@ -256,12 +259,14 @@ class LocalReader:
         for url, title, visit_count, last_visit_time in rows:
             visit_dt = chromium_time_to_datetime(last_visit_time)
             if visit_dt:
-                entries.append(HistoryEntry(
-                    url=url or "",
-                    title=title or "",
-                    visit_time=visit_dt,
-                    visit_count=visit_count or 1,
-                ))
+                entries.append(
+                    HistoryEntry(
+                        url=url or "",
+                        title=title or "",
+                        visit_time=visit_dt,
+                        visit_count=visit_count or 1,
+                    )
+                )
 
         return entries
 
@@ -289,14 +294,16 @@ class LocalReader:
 
             # Skip if filtering by folder and this isn't in that folder
             if folder_id is None or parent_id == folder_id:
-                bookmarks.append(Bookmark(
-                    id=node_id,
-                    url=url,
-                    title=title,
-                    parent_id=parent_id,
-                    date_added=date_added,
-                    is_folder=is_folder,
-                ))
+                bookmarks.append(
+                    Bookmark(
+                        id=node_id,
+                        url=url,
+                        title=title,
+                        parent_id=parent_id,
+                        date_added=date_added,
+                        is_folder=is_folder,
+                    )
+                )
 
             # Process children
             for child in node.get("children", []):
@@ -314,7 +321,8 @@ class LocalReader:
         all_bookmarks = self.get_bookmarks()
         query_lower = query.lower()
         return [
-            b for b in all_bookmarks
+            b
+            for b in all_bookmarks
             if query_lower in b.title.lower() or query_lower in b.url.lower()
         ]
 
@@ -405,10 +413,12 @@ class LocalReader:
                     # Avoid duplicates
                     existing_urls = {t.url for t in device.tabs}
                     if url_str not in existing_urls:
-                        device.tabs.append(Tab(
-                            url=url_str,
-                            title="",  # Title extraction is harder from protobuf
-                            favicon_url=None,
-                            last_active=None,
-                        ))
+                        device.tabs.append(
+                            Tab(
+                                url=url_str,
+                                title="",  # Title extraction is harder from protobuf
+                                favicon_url=None,
+                                last_active=None,
+                            )
+                        )
                 break

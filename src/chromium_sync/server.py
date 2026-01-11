@@ -12,20 +12,19 @@ from typing import Any
 
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
-from mcp.types import Tool, TextContent
+from mcp.types import TextContent, Tool
 
 from .local import (
-    LocalReader,
+    CONFIG_FILE,
+    Bookmark,
     Device,
     HistoryEntry,
-    Bookmark,
+    LocalReader,
     MultipleProfilesFound,
-    resolve_browser_profile,
     find_all_browser_profiles,
+    resolve_browser_profile,
     save_profile_choice,
-    CONFIG_FILE,
 )
-
 
 # Create the MCP server
 app = Server("chromium-sync")
@@ -95,7 +94,10 @@ async def list_tools() -> list[Tool]:
     return [
         Tool(
             name="browser_select",
-            description="Select which browser to use when multiple are installed. Use this when prompted to choose between browsers.",
+            description=(
+                "Select which browser to use when multiple are installed. "
+                "Use this when prompted to choose between browsers."
+            ),
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -114,7 +116,10 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="browser_tabs",
-            description="Get open tabs from all synced devices. Returns a list of devices with their open tabs.",
+            description=(
+                "Get open tabs from all synced devices. "
+                "Returns a list of devices with their open tabs."
+            ),
             inputSchema={
                 "type": "object",
                 "properties": {},
@@ -150,7 +155,10 @@ async def list_tools() -> list[Tool]:
                 "properties": {
                     "folder": {
                         "type": "string",
-                        "description": "Parent folder ID to filter by. Optional - returns all bookmarks if not specified.",
+                        "description": (
+                            "Parent folder ID to filter by. "
+                            "Optional - returns all bookmarks if not specified."
+                        ),
                     },
                 },
             },
