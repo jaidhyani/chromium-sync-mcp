@@ -1,6 +1,6 @@
 [project]
 name = "chromium-sync-mcp"
-version = "0.3.0"
+version = "0.3.1"
 description = "MCP server for accessing Chromium browser data (tabs, history, bookmarks) from Brave, Chrome, and Chromium"
 readme = "README.md"
 requires-python = ">=3.11"
