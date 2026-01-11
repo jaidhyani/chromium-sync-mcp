@@ -21,7 +21,7 @@ jobs:
         run: uv python install 3.11
 
       - name: Install dependencies
-        run: uv sync --dev
+        run: uv sync --extra dev
 
       - name: Run ruff
         run: uv run ruff check .
@@ -46,7 +46,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libleveldb-dev
 
       - name: Install dependencies
-        run: uv sync --dev
+        run: uv sync --extra dev
 
       - name: Run pyright
         run: uv run pyright
