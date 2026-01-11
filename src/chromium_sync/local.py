@@ -225,9 +225,38 @@ class LocalReader:
         return dest
 
     def get_history(
-        self, query: str | None = None, limit: int = 100, days_back: int | None = None
+        self,
+        query: str | None = None,
+        pattern: str | None = None,
+        limit: int = 100,
+        days_back: int | None = None,
+        after: str | None = None,
+        before: str | None = None,
     ) -> list[HistoryEntry]:
-        """Read browsing history from SQLite database."""
+        """Read browsing history from SQLite database.
+
+        Args:
+            query: Substring match against URL and title (case-insensitive).
+            pattern: Regex match against URL and title.
+            limit: Maximum entries to return.
+            days_back: Only entries from the last N days.
+            after: ISO date(time). Only entries on or after this time.
+            before: ISO date(time). Only entries before this time.
+
+        Raises:
+            ValueError: If both query and pattern are provided, or if
+                pattern is invalid regex, or if dates are malformed.
+        """
+        if query and pattern:
+            raise ValueError("Cannot use both 'query' and 'pattern'. Use one or the other.")
+
+        regex = None
+        if pattern:
+            try:
+                regex = re.compile(pattern, re.IGNORECASE)
+            except re.error as e:
+                raise ValueError(f"Invalid regex pattern: {e}")
+
         history_path = self.profile_path / "History"
         if not history_path.exists():
             return []
@@ -245,7 +274,7 @@ class LocalReader:
         params: list = []
 
         if query:
-            sql += " AND (url LIKE ? OR title LIKE ?)"
+            sql += " AND (url LIKE ? COLLATE NOCASE OR title LIKE ? COLLATE NOCASE)"
             params.extend([f"%{query}%", f"%{query}%"])
 
         if days_back:
@@ -254,8 +283,24 @@ class LocalReader:
             sql += " AND last_visit_time >= ?"
             params.append(int(cutoff))
 
-        sql += " ORDER BY last_visit_time DESC LIMIT ?"
-        params.append(limit)
+        if after:
+            after_dt = self._parse_iso_datetime(after, "after")
+            after_chromium = int(after_dt.timestamp() * 1_000_000 + CHROMIUM_EPOCH_OFFSET)
+            sql += " AND last_visit_time >= ?"
+            params.append(after_chromium)
+
+        if before:
+            before_dt = self._parse_iso_datetime(before, "before")
+            before_chromium = int(before_dt.timestamp() * 1_000_000 + CHROMIUM_EPOCH_OFFSET)
+            sql += " AND last_visit_time < ?"
+            params.append(before_chromium)
+
+        sql += " ORDER BY last_visit_time DESC"
+
+        # If using regex, we need to filter in Python, so fetch more rows
+        fetch_limit = limit * 10 if regex else limit
+        sql += " LIMIT ?"
+        params.append(fetch_limit)
 
         cursor.execute(sql, params)
         rows = cursor.fetchall()
@@ -263,6 +308,12 @@ class LocalReader:
 
         entries = []
         for url, title, visit_count, last_visit_time in rows:
+            if regex:
+                url_str = url or ""
+                title_str = title or ""
+                if not (regex.search(url_str) or regex.search(title_str)):
+                    continue
+
             visit_dt = chromium_time_to_datetime(last_visit_time)
             if visit_dt:
                 entries.append(
@@ -274,7 +325,26 @@ class LocalReader:
                     )
                 )
 
+            if len(entries) >= limit:
+                break
+
         return entries
+
+    def _parse_iso_datetime(self, value: str, param_name: str) -> datetime:
+        """Parse ISO date or datetime string."""
+        formats = [
+            "%Y-%m-%dT%H:%M:%S",
+            "%Y-%m-%d",
+        ]
+        for fmt in formats:
+            try:
+                return datetime.strptime(value, fmt)
+            except ValueError:
+                continue
+        raise ValueError(
+            f"Invalid date format for '{param_name}': '{value}'. "
+            f"Expected YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS"
+        )
 
     def get_bookmarks(self, folder_id: str | None = None) -> list[Bookmark]:
         """Read bookmarks from JSON file."""

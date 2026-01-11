@@ -155,13 +155,26 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="get_history",
-            description="Search browsing history. Supports text search and date filtering.",
+            description=(
+                "Search browsing history. Returns JSON array of entries. "
+                "Supports substring search, regex patterns, and date filtering."
+            ),
             inputSchema={
                 "type": "object",
                 "properties": {
                     "query": {
                         "type": "string",
-                        "description": "Text to search for in URLs and titles. Optional.",
+                        "description": (
+                            "Substring to search for in URLs and titles (case-insensitive). "
+                            "Cannot be used with 'pattern'."
+                        ),
+                    },
+                    "pattern": {
+                        "type": "string",
+                        "description": (
+                            "Regex pattern to match against URLs and titles. "
+                            "Cannot be used with 'query'."
+                        ),
                     },
                     "limit": {
                         "type": "integer",
@@ -170,7 +183,21 @@ async def list_tools() -> list[Tool]:
                     },
                     "days_back": {
                         "type": "integer",
-                        "description": "Only return history from the last N days. Optional.",
+                        "description": "Only return history from the last N days.",
+                    },
+                    "after": {
+                        "type": "string",
+                        "description": (
+                            "ISO date or datetime (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS). "
+                            "Only return entries on or after this time."
+                        ),
+                    },
+                    "before": {
+                        "type": "string",
+                        "description": (
+                            "ISO date or datetime (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS). "
+                            "Only return entries before this time."
+                        ),
                     },
                 },
             },
@@ -278,9 +305,24 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
 
     elif name == "get_history":
         query = arguments.get("query")
+        pattern = arguments.get("pattern")
         limit = arguments.get("limit", 100)
         days_back = arguments.get("days_back")
-        history = reader.get_history(query=query, limit=limit, days_back=days_back)
+        after = arguments.get("after")
+        before = arguments.get("before")
+
+        try:
+            history = reader.get_history(
+                query=query,
+                pattern=pattern,
+                limit=limit,
+                days_back=days_back,
+                after=after,
+                before=before,
+            )
+        except ValueError as e:
+            return [TextContent(type="text", text=f"Error: {e}")]
+
         result = with_setup_hint_if_empty(format_history(history), history)
         return [TextContent(type="text", text=result)]
 
@@ -349,17 +391,19 @@ def format_local_tabs(tabs: list[Tab]) -> str:
 
 
 def format_history(history: list[HistoryEntry]) -> str:
-    """Format history entries for display."""
-    if not history:
-        return "No history entries found."
+    """Format history entries as JSON array."""
+    import json
 
-    lines = [f"Found {len(history)} history entries:\n"]
-    for entry in history:
-        time_str = entry.visit_time.strftime("%Y-%m-%d %H:%M")
-        visits = f" ({entry.visit_count} visits)" if entry.visit_count > 1 else ""
-        lines.append(f"- [{entry.title}]({entry.url}) - {time_str}{visits}")
-
-    return "\n".join(lines)
+    entries = [
+        {
+            "url": entry.url,
+            "title": entry.title,
+            "visit_time": entry.visit_time.isoformat(),
+            "visit_count": entry.visit_count,
+        }
+        for entry in history
+    ]
+    return json.dumps(entries)
 
 
 def format_bookmarks(bookmarks: list[Bookmark]) -> str:
